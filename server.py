@@ -73,7 +73,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(current_dir)
-    zu
+    
     port = PORT
     while True:
         try:

@@ -7,25 +7,44 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="container">
-        <canvas id="canvas"></canvas>
-        <div id="resizer"></div>
-        <div id="editor-container">
-            <textarea id="code-editor" spellcheck="false"></textarea>
-            <div id="controls">
-                <button id="run-btn">Run (Ctrl+Enter)</button>
-                <select id="shader-select" style="max-width: 150px;">
-                    <option value="">(Select Shader)</option>
-                </select>
-                <button id="load-file-btn">Load</button>
-                <button id="reset-btn">Reset</button>
-                <input type="text" id="filename-input" placeholder="filename.frag" value="my_shader.frag">
-                <button id="save-btn">Save</button>
-                <span id="status">Ready</span>
+    <div id="workspace">
+        <!-- Node Graph Container -->
+        <div id="node-container"></div>
+        <svg id="connections"></svg>
+        
+        <!-- Code Editor Panel (Draggable/Docked) -->
+        <div id="editor-panel">
+            <div id="editor-header">
+                <span id="current-node-name">Select a Node</span>
+                <div id="controls">
+                    <button id="run-btn">Run (Ctrl+Enter)</button>
+                    <button id="add-node-btn">+ Add Node</button>
+                    <button id="save-btn">Save</button>
+                    <span id="status">Ready</span>
+                </div>
             </div>
+            <textarea id="code-editor" spellcheck="false"></textarea>
             <div id="log"></div>
         </div>
     </div>
+    
+    <!-- Templates for Nodes -->
+    <template id="node-template">
+        <div class="node">
+            <div class="node-header">
+                <span class="node-title">Shader Node</span>
+                <button class="node-close">x</button>
+            </div>
+            <div class="node-body">
+                <canvas class="node-canvas" width="200" height="150"></canvas>
+            </div>
+            <div class="node-footer">
+                <div class="socket input" title="Input Texture"></div>
+                <div class="socket output" title="Output Texture"></div>
+            </div>
+        </div>
+    </template>
+
     <script src="script.js"></script>
 </body>
 </html>
