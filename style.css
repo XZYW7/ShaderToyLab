@@ -152,9 +152,9 @@ body, html {
 
 .node-canvas {
     width: 100%;
-    height: 150px;
+    height: auto;
     background: #000;
-    display: block;
+    display: block;   
 }
 
 .node-footer {
@@ -163,7 +163,23 @@ body, html {
     padding: 5px;
     background: #444;
     position: relative;
-    height: 20px;
+    /* height: 20px; Remove fixed height to allow expansion */
+    min-height: 20px;
+}
+
+.node-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-start; /* Align to left */
+}
+
+.node-outputs {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-end; /* Align to right */
+    justify-content: flex-start; /* Start from top */
 }
 
 .socket {
@@ -173,15 +189,50 @@ body, html {
     background: #888;
     border: 1px solid #aaa;
     cursor: pointer;
+    box-sizing: border-box;
+    display: inline-block;
+}
+
+.socket::after {
+    content: attr(title);
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    color: #ccc;
+    background: rgba(0,0,0,0.5);
+    padding: 2px 4px;
+    border-radius: 3px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+
+.socket:hover::after {
+    opacity: 1;
+}
+
+.socket.input::after {
+    left: 20px;
+}
+
+.socket.output::after {
+    right: 20px;
 }
 
 .socket.input {
-    margin-left: 5px;
+    margin-left: 0;
 }
 
 .socket.output {
-    margin-right: 5px;
+    margin-right: 0;
     background: #007acc;
+}
+
+.socket:hover {
+    background: #fff;
+    border-color: #fff;
 }
 
 .socket:hover {

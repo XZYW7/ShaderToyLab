@@ -53,32 +53,6 @@ const quadBuffer = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
 
-// -- Shader Source Constants --
-const SHADER_SOURCES = {
-    DEFAULT_VS: `#version 300 es
-        in vec4 position;
-        void main() { gl_Position = position; }`,
-    DEFAULT_FS: `#version 300 es
-        precision mediump float;
-        out vec4 fragColor;
-        void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
-            vec2 uv = fragCoord/iResolution.xy;
-            vec3 col = 0.5 + 0.5*cos(iTime+uv.xyx+vec3(0,2,4));
-            fragColor = vec4(col,1.0);
-        }
-        void main() { mainImage(fragColor, gl_FragCoord.xy); }`,
-    DISPLAY_VS: `#version 300 es
-        in vec4 position;
-        out vec2 vUv;
-        void main() { vUv = position.xy * 0.5 + 0.5; gl_Position = position; }`,
-    DISPLAY_FS: `#version 300 es
-        precision mediump float;
-        uniform sampler2D uTex;
-        in vec2 vUv;
-        out vec4 outColor;
-        void main() { outColor = texture(uTex, vUv); }`
-};
-
 const UNIFORM_BLOCK = `
 uniform vec3 iResolution;
 uniform float iTime;
@@ -93,6 +67,37 @@ uniform sampler2D iChannel2;
 uniform sampler2D iChannel3;
 uniform vec3 iChannelResolution[4];
 `;
+
+const SHADER_SOURCES = {
+    DEFAULT_VS: `#version 300 es
+        in vec4 position;
+        void main() { gl_Position = position; }`,
+    DEFAULT_FS: `#version 300 es
+        out vec4 fragColor;
+        void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
+            vec2 uv = fragCoord/iResolution.xy;
+            vec3 col = 0.5 + 0.5*cos(iTime+uv.xyx+vec3(0,2,4));
+            fragColor = vec4(col,1.0);
+        }
+        void main() { mainImage(fragColor, gl_FragCoord.xy); }`,
+    // Helper to generate simple color shader code
+    CONST_FS: (r,g,b,a=1.0) => `#version 300 es
+precision mediump float;
+out vec4 fragColor;
+void main() {
+    fragColor = vec4(${r}, ${g}, ${b}, ${a});
+}`,
+    DISPLAY_VS: `#version 300 es
+        in vec4 position;
+        out vec2 vUv;
+        void main() { vUv = position.xy * 0.5 + 0.5; gl_Position = position; }`,
+    DISPLAY_FS: `#version 300 es
+        precision mediump float;
+        uniform sampler2D uTex;
+        in vec2 vUv;
+        out vec4 outColor;
+        void main() { outColor = texture(uTex, vUv); }`
+};
 
 // -- Helper Functions --
 
@@ -160,9 +165,11 @@ class ShaderNode {
         this.ctx2d = this.canvas.getContext('2d');
         
         this.initResources();
-        if (this.type === 'shader' || this.type === 'const') {
-             this.compile();
+        if (this.type === 'shader') {
+             // Invalidate existing compile to force update
+             this.program = null;
         }
+        this.compile();
     }
 
     createUI() {
@@ -172,8 +179,15 @@ class ShaderNode {
         el.style.top = this.y + 'px';
         el.id = 'node-' + this.id;
         
-        this.updateTitle(el);
+        el.style.width = this.width / 2 + 'px'; // Let width scale naturally? No, node width is fixed
+        // Actually, CSS sets node width to 200px.
+        // We want the node to be resizable or adjust to aspect ratio.
+        // The canvas inside is constrained by .node width 200px.
+        // The height depends on resolution aspect ratio.
         
+        this.updateTitle(el);
+        this.updateSockets(el);
+
         el.addEventListener('mousedown', (e) => {
             if (e.target.closest('.socket')) return; 
             selectNode(this);
@@ -192,6 +206,43 @@ class ShaderNode {
     updateTitle(el = this.element) {
         if(el) el.querySelector('.node-title').textContent = `${this.name} (${this.type})`;
     }
+
+    updateSockets(el = this.element) {
+        if (!el) return;
+        const footer = el.querySelector('.node-footer');
+        footer.innerHTML = ''; 
+
+        const inputsContainer = document.createElement('div');
+        inputsContainer.className = 'node-inputs';
+        footer.appendChild(inputsContainer);
+
+        // Inputs for Shader Nodes
+        if (this.type === 'shader') {
+            this.inputs.forEach((inputId, i) => {
+                this.createInputSocket(inputsContainer, i);
+            });
+            this.createInputSocket(inputsContainer, this.inputs.length);
+        }
+
+        // Output
+        const outputsContainer = document.createElement('div');
+        outputsContainer.className = 'node-outputs';
+        footer.appendChild(outputsContainer);
+
+        const outSocket = document.createElement('div');
+        outSocket.className = 'socket output';
+        outSocket.title = 'Output';
+        outputsContainer.appendChild(outSocket);
+    }
+
+    createInputSocket(container, index) {
+        const socket = document.createElement('div');
+        socket.className = 'socket input';
+        socket.dataset.index = index;
+        socket.title = `iChannel${index}`;
+        container.appendChild(socket);
+    }
+
 
     // Resource Management
     initResources() {
@@ -252,7 +303,6 @@ class ShaderNode {
 
     compile() {
         if (this.type === 'texture') {
-             this.program = null;
              return;
         }
 
@@ -260,16 +310,66 @@ class ShaderNode {
         if (!vs) return;
 
         let source = this.code;
-        // Auto-inject uniforms
-        if (!source.includes('uniform vec3 iResolution;')) {
-             if (source.includes('precision mediump float;')) {
-                 source = source.replace('precision mediump float;', 'precision mediump float;\n' + UNIFORM_BLOCK);
-             } else if (source.includes('precision highp float;')) {
-                 source = source.replace('precision highp float;', 'precision highp float;\n' + UNIFORM_BLOCK);
-             } else if (source.includes('#version')) {
-                 source = source.replace(/#version .*\n/, match => match + 'precision mediump float;\n' + UNIFORM_BLOCK);
-             } else {
-                 source = 'precision mediump float;\n' + UNIFORM_BLOCK + source;
+        
+        // Ensure version directive is present
+        if (!source.trim().startsWith('#version 300 es')) {
+            source = '#version 300 es\n' + source;
+        }
+
+        // Auto-inject uniforms only if not exact "Const Node" code pattern
+        // Or just let it fail gracefully?
+        // Actually ConstNode code logic overrides `mainImage` usually?
+        // Ah, `Const` nodes use a raw `main` function (see below logic),
+        // but normal ShaderNodes use `mainImage`.
+        
+        // Check if `mainImage` exists in source
+        if(source.includes("void mainImage")) {
+             // 1. Inject Uniforms
+             if (!source.includes('uniform vec3 iResolution;')) {
+                  const injection = UNIFORM_BLOCK;
+                  if (source.includes('precision mediump float;')) {
+                      source = source.replace('precision mediump float;', 'precision mediump float;\n' + injection);
+                  } else if (source.includes('precision highp float;')) {
+                      source = source.replace('precision highp float;', 'precision highp float;\n' + injection);
+                  } else {
+                      // Inject after version if no precision found, add precision
+                      source = source.replace(/#version 300 es\s*\n/, '#version 300 es\nprecision mediump float;\n' + injection);
+                  }
+             }
+
+             // 2. Ensuring main() calls mainImage()
+             if (!source.includes('void main()')) {
+                 source += '\nvoid main() { mainImage(fragColor, gl_FragCoord.xy); }';
+             }
+
+             // 3. Ensure fragColor output exists
+             if(!source.includes('out vec4 fragColor')) {
+                  // Inject simply after version or precision?
+                  // Safer to inject after version
+                   source = source.replace(/#version 300 es\s*\n/, '#version 300 es\nout vec4 fragColor;\n');
+             }
+        } else {
+             // Const Mode or Raw mode
+             // Inject uniforms if likely needed (e.g. user mentions iTime/iResolution but didn't declare them)
+             // But usually raw shaders handle themselves. We'll be safe and only inject if requested or obviously missing.
+             // Actually, Const Nodes use standard uniforms often.
+             if ((source.includes('iTime') || source.includes('iResolution')) && !source.includes('uniform float iTime;')) {
+                  const injection = UNIFORM_BLOCK;
+                   // Inject generally
+                   if(!source.includes('precision')) {
+                        source = source.replace(/#version 300 es\s*\n/, '#version 300 es\nprecision mediump float;\n' + injection);
+                   } else {
+                        // Inject after first precision
+                        // But finding it with regex is safer or just appending ?
+                        // safer to replace precision line
+                        if (source.includes('precision mediump float;')) {
+                             source = source.replace('precision mediump float;', 'precision mediump float;\n' + injection);
+                        } else if (source.includes('precision highp float;')) {
+                             source = source.replace('precision highp float;', 'precision highp float;\n' + injection);
+                        }
+                   }
+             } else if(!source.includes('precision')) {
+                 source = source.replace(/#version 300 es\s*\n/, '#version 300 es\nprecision mediump float;\n');
              }
         }
 
@@ -308,15 +408,18 @@ class ShaderNode {
         const locRes = gl.getUniformLocation(this.program, 'iResolution');
         if (locRes) gl.uniform3f(locRes, this.width, this.height, 1.0);
         
-        // -- Bind Inputs & Channel Resolutions --
-        const channelResolutions = new Float32Array(12);
+        // -- Bind Inputs --
+        // Support up to 8 channels effectively, but uniform block is fixed?
+        // Let's iterate inputs completely.
+        const maxChannels = Math.max(4, this.inputs.length); 
+        const channelResolutions = new Float32Array(maxChannels * 3);
 
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < maxChannels; i++) {
             gl.activeTexture(gl.TEXTURE0 + i);
             let tex = null;
             let w = 0, h = 0;
 
-            if (i < this.inputs.length) {
+            if (i < this.inputs.length && this.inputs[i]) {
                 const inputNode = AppState.nodes.find(n => n.id === this.inputs[i]);
                 if (inputNode && inputNode.texture) {
                     tex = inputNode.texture;
@@ -336,6 +439,11 @@ class ShaderNode {
         }
 
         const locChanRes = gl.getUniformLocation(this.program, 'iChannelResolution');
+        // Check if shader actually uses array of size 4 or dynamically declared?
+        // Standard ShaderToy uses fixed 4.
+        // If we want dynamic, we assume user declared `uniform vec3 iChannelResolution[N];`
+        // But for compatibility with existing shader code, we should probably stick to 4 unless handled specially.
+        // We pass the array, WebGL will use as much as formatting allows.
         if (locChanRes) gl.uniform3fv(locChanRes, channelResolutions);
         
         // Draw Fullscreen Quad
@@ -369,6 +477,9 @@ class ShaderNode {
         drawTexture(this.texture);
 
         // Copy to 2D Canvas
+        // Maintain aspect ratio in preview
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
         this.ctx2d.drawImage(sharedCanvas, 0, 0, this.width, this.height, 0, 0, this.canvas.width, this.canvas.height);
     }
 }
@@ -490,19 +601,16 @@ DOM.inputs.type.addEventListener('change', () => {
         if (AppState.selectedNode.type === 'const') {
              // Init Default Const shader if empty
              if (!AppState.selectedNode.code || AppState.selectedNode.code === SHADER_SOURCES.DEFAULT_FS) {
-                 AppState.selectedNode.code = `#version 300 es
-precision mediump float;
-out vec4 fragColor;
-void main() {
-    fragColor = vec4(1.0, 1.0, 1.0, 1.0);
-}`;
+                 AppState.selectedNode.code = SHADER_SOURCES.CONST_FS(1.0, 1.0, 1.0);
              }
-             if (!AppState.selectedNode.program) AppState.selectedNode.compile();
+             // Force recompile to ensure program is ready
+             AppState.selectedNode.compile();
         } else if (AppState.selectedNode.type === 'shader') {
              if (!AppState.selectedNode.program) AppState.selectedNode.compile();
         }
         
         updateUIForType(AppState.selectedNode.type);
+        AppState.selectedNode.updateSockets(); // Update Slots
         AppState.selectedNode.initResources();
         AppState.selectedNode.display();
     }
@@ -532,12 +640,7 @@ DOM.inputs.colorPicker.addEventListener('input', () => {
         const g = parseInt(hex.slice(3,5), 16) / 255;
         const b = parseInt(hex.slice(5,7), 16) / 255;
         
-        AppState.selectedNode.code = `#version 300 es
-precision mediump float;
-out vec4 fragColor;
-void main() {
-    fragColor = vec4(${r.toFixed(3)}, ${g.toFixed(3)}, ${b.toFixed(3)}, 1.0);
-}`;
+        AppState.selectedNode.code = SHADER_SOURCES.CONST_FS(r.toFixed(3), g.toFixed(3), b.toFixed(3));
         AppState.selectedNode.compile(); 
     }
 });
@@ -593,7 +696,12 @@ document.addEventListener('click', (e) => {
         }
     } else {
         if (type === 'input' && AppState.connectionStart.node.id !== node.id) {
-            node.inputs = [AppState.connectionStart.node.id];
+            const inputIndex = parseInt(target.dataset.index) || 0;
+            // Ensure inputs array is large enough
+            while(node.inputs.length <= inputIndex) node.inputs.push(null);
+            
+            node.inputs[inputIndex] = AppState.connectionStart.node.id;
+            node.updateSockets();
             updateConnections();
         }
         if(AppState.connectionStart.element) AppState.connectionStart.element.style.background = '';
@@ -604,19 +712,22 @@ document.addEventListener('click', (e) => {
 function updateConnections() {
     DOM.connectionsSvg.innerHTML = ''; 
     AppState.nodes.forEach(targetNode => {
-        targetNode.inputs.forEach(sourceId => {
+        targetNode.inputs.forEach((sourceId, index) => {
+            if (!sourceId) return;
             const sourceNode = AppState.nodes.find(n => n.id === sourceId);
             if (sourceNode) {
-                drawLine(sourceNode, targetNode);
+                drawLine(sourceNode, targetNode, index);
             }
         });
     });
 }
 
-function drawLine(n1, n2) {
-    // Assuming socket positions are relatively static within node structure
+function drawLine(n1, n2, inputIndex = 0) {
+    // Determine source and target positions
     const p1 = n1.element.querySelector('.socket.output').getBoundingClientRect();
-    const p2 = n2.element.querySelector('.socket.input').getBoundingClientRect();
+    // Find the specific input socket ensuring it exists
+    const inputSockets = n2.element.querySelectorAll('.socket.input');
+    const p2 = (inputSockets[inputIndex] || inputSockets[0]).getBoundingClientRect();
     
     const x1 = p1.left + p1.width/2;
     const y1 = p1.top + p1.height/2;
