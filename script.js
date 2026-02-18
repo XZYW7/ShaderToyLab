@@ -663,13 +663,14 @@ DOM.inputs.texture.addEventListener('change', (e) => {
         const reader = new FileReader();
         reader.onload = (event) => {
             const img = new Image();
+            const node = AppState.selectedNode; // Capture node
             img.onload = () => {
-             this.loadTexture(img);
-             this.textureImgSrc = img.src; // Cache for save
+                node.loadTexture(img);
+                node.textureImgSrc = img.src; // Cache for save
+            };
+            img.src = event.target.result;
         };
-        img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
+        reader.readAsDataURL(file);
     }
 });
 
@@ -689,6 +690,15 @@ DOM.buttons.run.addEventListener('click', () => {
     if (AppState.selectedNode) {
         AppState.selectedNode.code = DOM.editor.value;
         AppState.selectedNode.compile();
+    }
+});
+
+// Sync code editor changes to the selected node immediately
+DOM.editor.addEventListener('input', () => {
+    if (AppState.selectedNode && AppState.selectedNode.type === 'shader') {
+        AppState.selectedNode.code = DOM.editor.value;
+        // Optional: Recompile on the fly? No, too heavy. Wait for explicit Run.
+        // But we MUST save the code to the node object so it persists on Save/Switch.
     }
 });
 
