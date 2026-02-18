@@ -11,7 +11,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
-        if self.path == '/list_shaders':
+        if self.path == '/shaders':
             try:
                 shaders_dir = os.path.join(os.getcwd(), 'shaders')
                 if not os.path.exists(shaders_dir):
@@ -31,18 +31,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             super().do_GET()
 
     def do_POST(self):
-        if self.path == '/save':
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            try:
+        try:
+            if self.path == '/save_graph':
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                
+                # Save raw JSON data to graph.json
+                filepath = os.path.join(os.getcwd(), 'graph.json')
+                
+                with open(filepath, 'wb') as f:
+                    f.write(post_data)
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'ok', 'message': 'Graph saved to graph.json'}).encode('utf-8'))
+
+            elif self.path == '/save':
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                
                 data = json.loads(post_data.decode('utf-8'))
                 filename = data.get('filename')
                 code = data.get('code')
                 
                 if not filename or not code:
                     self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
                     self.end_headers()
-                    self.wfile.write(b'Missing filename or code')
+                    self.wfile.write(json.dumps({'status': 'error', 'message': 'Missing filename or code'}).encode('utf-8'))
                     return
 
                 # Ensure filename is safe and ends with .frag
@@ -62,18 +79,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({'status': 'ok', 'message': f'Saved to shaders/{filename}'}).encode('utf-8'))
-            except Exception as e:
-                self.send_response(500)
+            else:
+                self.send_response(404)
                 self.end_headers()
-                self.wfile.write(str(e).encode('utf-8'))
-        else:
-            self.send_response(404)
+
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
             self.end_headers()
+            self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode('utf-8'))
 
 if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(current_dir)
-    zu
+    
     port = PORT
     while True:
         try:

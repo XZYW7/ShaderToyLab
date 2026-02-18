@@ -7,25 +7,82 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="container">
-        <canvas id="canvas"></canvas>
-        <div id="resizer"></div>
-        <div id="editor-container">
-            <textarea id="code-editor" spellcheck="false"></textarea>
-            <div id="controls">
-                <button id="run-btn">Run (Ctrl+Enter)</button>
-                <select id="shader-select" style="max-width: 150px;">
-                    <option value="">(Select Shader)</option>
-                </select>
-                <button id="load-file-btn">Load</button>
-                <button id="reset-btn">Reset</button>
-                <input type="text" id="filename-input" placeholder="filename.frag" value="my_shader.frag">
-                <button id="save-btn">Save</button>
-                <span id="status">Ready</span>
+    <div id="workspace">
+        <!-- Node Graph Container -->
+        <div id="node-container"></div>
+        <svg id="connections"></svg>
+        
+        <!-- Code Editor Panel (Draggable/Docked) -->
+        <div id="editor-panel">
+            <div id="editor-header">
+                <div class="header-row">
+                    <span id="current-node-label">Node:</span>
+                    <input type="text" id="node-name-input" placeholder="Node Name" value="Node 1">
+                    <select id="node-type-select">
+                        <option value="shader">Shader</option>
+                        <option value="texture">Texture</option>
+                        <option value="const">Const</option>
+                    </select>
+                </div>
+                <div class="header-row">
+                    <div id="node-res-container" style="display:inline-block;">
+                        <label>Res:</label>
+                        <input type="number" id="node-res-w" value="512" style="width: 50px;">
+                        <span>x</span>
+                        <input type="number" id="node-res-h" value="512" style="width: 50px;">
+                    </div>
+                    <div id="node-color-container" style="display:none; margin-left: 10px;">
+                        <label>Color:</label>
+                        <input type="color" id="node-color-picker" value="#ffffff">
+                    </div>
+                </div>
+                <div class="header-row">
+                     <button id="import-shader-btn" style="display:none;">Load Shader</button>
+                     <button id="export-shader-btn" style="display:none;">Save Shader</button>
+                </div>
+                <div id="controls">
+                    <button id="run-btn">Run (Ctrl+Enter)</button>
+                    <button id="upload-btn" style="display:none;">Upload Img</button>
+                    <input type="file" id="texture-input" accept="image/*" style="display:none;">
+                    <button id="add-node-btn">+ Add Node</button>
+                    <button id="save-btn">Save</button>
+                    <button id="load-btn">Load</button>
+                    <span id="status">Ready</span>
+                </div>
             </div>
+            <textarea id="code-editor" spellcheck="false"></textarea>
             <div id="log"></div>
         </div>
     </div>
+    
+    <!-- Templates for Nodes -->
+    <template id="node-template">
+        <div class="node">
+            <div class="node-header">
+                <span class="node-title">Shader Node</span>
+                <button class="node-close">x</button>
+            </div>
+            <div class="node-body">
+                <canvas class="node-canvas" width="200" height="150"></canvas>
+            </div>
+            <div class="node-footer">
+                <div class="socket input" title="Input Texture"></div>
+                <div class="socket output" title="Output Texture"></div>
+            </div>
+        </div>
+    </template>
+
+    <dialog id="file-dialog">
+        <form method="dialog">
+            <h3>Select a Shader</h3>
+            <select id="file-list" size="10" style="width: 300px; margin-bottom: 10px;"></select>
+            <div>
+                <button value="cancel">Cancel</button>
+                <button id="file-select-btn" value="confirm">Load</button>
+            </div>
+        </form>
+    </dialog>
+
     <script src="script.js"></script>
 </body>
 </html>
