@@ -34,6 +34,12 @@ const AppState = {
     nextNodeId: 1,
     dragNode: null,
     dragOffset: { x: 0, y: 0 },
+    // Viewport state
+    scale: 1,
+    pan: { x: 0, y: 0 },
+    isPanning: false,
+    panStart: { x: 0, y: 0 },
+    
     connectionStart: null,
     startTime: Date.now()
 };
@@ -684,12 +690,82 @@ DOM.buttons.run.addEventListener('click', () => {
 
 DOM.buttons.addNode.addEventListener('click', addNode);
 
+// -- Interaction (Zoom & Pan) --
+
+const workspace = DOM.container.parentElement; // Assumes #node-container inside #workspace
+let isPanning = false;
+let lastPanX = 0;
+let lastPanY = 0;
+
+function updateTransform() {
+    const transform = `translate(${AppState.pan.x}px, ${AppState.pan.y}px) scale(${AppState.scale})`;
+    DOM.container.style.transform = transform;
+    DOM.container.style.transformOrigin = '0 0';
+    DOM.connectionsSvg.style.transform = transform;
+    DOM.connectionsSvg.style.transformOrigin = '0 0';
+    
+    // Update background grid
+    workspace.style.backgroundPosition = `${AppState.pan.x}px ${AppState.pan.y}px`;
+    workspace.style.backgroundSize = `${20 * AppState.scale}px ${20 * AppState.scale}px`;
+}
+
+workspace.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const zoomIntensity = 0.1;
+    const delta = e.deltaY > 0 ? -zoomIntensity : zoomIntensity;
+    const newScale = Math.min(Math.max(0.1, AppState.scale + delta), 5); // Limit scale
+
+    // Zoom towards mouse
+    const mx = (e.clientX - AppState.pan.x) / AppState.scale;
+    const my = (e.clientY - AppState.pan.y) / AppState.scale;
+
+    AppState.pan.x -= mx * (newScale - AppState.scale);
+    AppState.pan.y -= my * (newScale - AppState.scale);
+    AppState.scale = newScale;
+
+    updateTransform();
+}, { passive: false }); // Important for preventing default scroll
+
+workspace.addEventListener('mousedown', (e) => {
+    // Middle click or Space+Left Click
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+        isPanning = true;
+        lastPanX = e.clientX;
+        lastPanY = e.clientY;
+        workspace.style.cursor = 'grabbing';
+        e.preventDefault(); 
+    }
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (isPanning) {
+        const dx = e.clientX - lastPanX;
+        const dy = e.clientY - lastPanY;
+        AppState.pan.x += dx;
+        AppState.pan.y += dy;
+        lastPanX = e.clientX;
+        lastPanY = e.clientY;
+        updateTransform();
+    }
+});
+
+window.addEventListener('mouseup', () => {
+    if (isPanning) {
+        isPanning = false;
+        workspace.style.cursor = '';
+    }
+});
+
 // -- Interaction (Drag & Connect) --
 
 function startDrag(e, node) {
     AppState.dragNode = node;
-    AppState.dragOffset.x = e.clientX - node.x;
-    AppState.dragOffset.y = e.clientY - node.y;
+    // Transform mouse into world space for correct offset
+    const mx = (e.clientX - AppState.pan.x) / AppState.scale;
+    const my = (e.clientY - AppState.pan.y) / AppState.scale;
+    
+    AppState.dragOffset.x = mx - node.x;
+    AppState.dragOffset.y = my - node.y;
     
     document.addEventListener('mousemove', onDrag);
     document.addEventListener('mouseup', endDrag);
@@ -697,8 +773,12 @@ function startDrag(e, node) {
 
 function onDrag(e) {
     if (!AppState.dragNode) return;
-    AppState.dragNode.x = e.clientX - AppState.dragOffset.x;
-    AppState.dragNode.y = e.clientY - AppState.dragOffset.y;
+    const mx = (e.clientX - AppState.pan.x) / AppState.scale;
+    const my = (e.clientY - AppState.pan.y) / AppState.scale;
+    
+    AppState.dragNode.x = mx - AppState.dragOffset.x;
+    AppState.dragNode.y = my - AppState.dragOffset.y;
+    
     AppState.dragNode.element.style.left = AppState.dragNode.x + 'px';
     AppState.dragNode.element.style.top = AppState.dragNode.y + 'px';
     updateConnections();
@@ -753,20 +833,25 @@ function updateConnections() {
 }
 
 function drawLine(n1, n2, inputIndex = 0) {
-    // Determine source and target positions
+    // Determine source and target positions in screen space
     const p1 = n1.element.querySelector('.socket.output').getBoundingClientRect();
-    // Find the specific input socket ensuring it exists
     const inputSockets = n2.element.querySelectorAll('.socket.input');
     const p2 = (inputSockets[inputIndex] || inputSockets[0]).getBoundingClientRect();
     
-    const x1 = p1.left + p1.width/2;
-    const y1 = p1.top + p1.height/2;
-    const x2 = p2.left + p2.width/2;
-    const y2 = p2.top + p2.height/2;
+    // Convert to world space relative to the container for SVG path
+    const x1 = (p1.left + p1.width/2 - AppState.pan.x) / AppState.scale;
+    const y1 = (p1.top + p1.height/2 - AppState.pan.y) / AppState.scale;
+    
+    const x2 = (p2.left + p2.width/2 - AppState.pan.x) / AppState.scale;
+    const y2 = (p2.top + p2.height/2 - AppState.pan.y) / AppState.scale;
     
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     const d = `M ${x1} ${y1} C ${x1+50} ${y1}, ${x2-50} ${y2}, ${x2} ${y2}`;
     path.setAttribute('d', d);
+    // Scale stroke width so lines remain visible but not huge when zoomed in?
+    // Actually, if we scale the container, stroke width scales too.
+    // If user wants constant stroke width, we should invert scale on stroke-width style.
+    path.style.strokeWidth = 2 / AppState.scale; 
     DOM.connectionsSvg.appendChild(path);
 }
 
