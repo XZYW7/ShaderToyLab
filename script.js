@@ -24,7 +24,15 @@ const DOM = {
         run: document.getElementById('run-btn'),
         addNode: document.getElementById('add-node-btn'),
         save: document.getElementById('save-btn'),
-        load: document.getElementById('load-btn')
+        load: document.getElementById('load-btn'),
+        // New buttons for individual shader files
+        importShader: document.getElementById('import-shader-btn'),
+        exportShader: document.getElementById('export-shader-btn')
+    },
+    dialogs: {
+        file: document.getElementById('file-dialog'),
+        fileList: document.getElementById('file-list'),
+        fileSelect: document.getElementById('file-select-btn')
     }
 };
 
@@ -570,6 +578,8 @@ function selectNode(node) {
 function updateUIForType(type) {
     // Reset visibility
     DOM.buttons.upload.style.display = 'none';
+    if(DOM.buttons.importShader) DOM.buttons.importShader.style.display = 'none';
+    if(DOM.buttons.exportShader) DOM.buttons.exportShader.style.display = 'none';
     if(DOM.inputs.colorContainer) DOM.inputs.colorContainer.style.display = 'none';
     if(DOM.inputs.resContainer) DOM.inputs.resContainer.style.display = 'inline-block';
     
@@ -598,9 +608,114 @@ function updateUIForType(type) {
         }
     } else {
         DOM.buttons.run.style.display = 'inline-block';
+        if(DOM.buttons.importShader) DOM.buttons.importShader.style.display = 'inline-block';
+        if(DOM.buttons.exportShader) DOM.buttons.exportShader.style.display = 'inline-block';
         DOM.editor.disabled = false;
         if (AppState.selectedNode) DOM.editor.value = AppState.selectedNode.code;
     }
+}
+
+// -- File System Logic (Individual Shaders) --
+
+if (DOM.buttons.exportShader) {
+    DOM.buttons.exportShader.addEventListener('click', () => {
+        if (!AppState.selectedNode || AppState.selectedNode.type !== 'shader') return;
+        
+        const filename = prompt("Enter filename to save shader (e.g. 'my_shader'):", AppState.selectedNode.name);
+        if (!filename) return;
+
+        fetch('/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                filename: filename.endsWith('.frag') ? filename : filename + '.frag',
+                code: AppState.selectedNode.code
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            alert(data.message);
+        })
+        .catch(e => {
+            console.error(e);
+            alert("Error saving shader: " + e.message);
+        });
+    });
+}
+
+if (DOM.buttons.importShader) {
+    DOM.buttons.importShader.addEventListener('click', () => {
+        if (!AppState.selectedNode || AppState.selectedNode.type !== 'shader') return;
+        
+        fetch('/shaders')
+        .then(r => r.json())
+        .then(files => {
+            if (!Array.isArray(files)) throw new Error("Invalid response from server");
+            
+            // Populate list
+            const list = DOM.dialogs.fileList; // Assumes we added this to DOM object
+            list.innerHTML = '';
+            files.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = f;
+                list.appendChild(opt);
+            });
+            
+            // Show Dialog
+            if (typeof DOM.dialogs.file.showModal === 'function') {
+                DOM.dialogs.file.showModal();
+            } else {
+                alert("Your browser does not support <dialog> element.");
+            }
+        })
+        .catch(e => {
+            console.error(e);
+            alert("Could not load shader list: " + e.message);
+        });
+    });
+}
+
+if (DOM.dialogs.fileSelect) {
+    DOM.dialogs.fileSelect.addEventListener('click', (e) => {
+        e.preventDefault(); // Prevent form submission
+        const selectedFile = DOM.dialogs.fileList.value;
+        if (!selectedFile) return;
+        
+        fetch('/shaders/' + selectedFile) // Should work if server serves root
+        // Actually server serves from root, and file is in shaders/, so url is shaders/filename
+        .then(r => {
+             // Handle if server doesn't serve from root correctly for subfolders?
+             // Since server.py is SimpleHTTPRequestHandler at root, /shaders/file.frag is correct.
+             // Wait, the list returned by /shaders only contains filenames.
+             // So we fetch('shaders/' + selectedFile)
+             return fetch('shaders/' + selectedFile);
+        })
+        .then(r => {
+            if (!r.ok) throw new Error("File not found");
+            return r.text();
+        })
+        .then(code => {
+            if (AppState.selectedNode) {
+                AppState.selectedNode.code = code;
+                DOM.editor.value = code;
+                AppState.selectedNode.compile();
+                DOM.dialogs.file.close();
+            }
+        })
+        .catch(err => {
+            alert("Error loading file: " + err.message);
+        });
+    });
+}
+
+// Cancel handling for dialog is automatic with form method=dialog usually, but let's be safe
+const cancelBtn = DOM.dialogs.file.querySelector('button[value="cancel"]');
+if(cancelBtn) {
+    cancelBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        DOM.dialogs.file.close();
+    });
 }
 
 // -- User Inputs & Events --

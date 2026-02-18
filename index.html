@@ -36,6 +36,10 @@
                         <input type="color" id="node-color-picker" value="#ffffff">
                     </div>
                 </div>
+                <div class="header-row">
+                     <button id="import-shader-btn" style="display:none;">Load Shader</button>
+                     <button id="export-shader-btn" style="display:none;">Save Shader</button>
+                </div>
                 <div id="controls">
                     <button id="run-btn">Run (Ctrl+Enter)</button>
                     <button id="upload-btn" style="display:none;">Upload Img</button>
@@ -67,6 +71,17 @@
             </div>
         </div>
     </template>
+
+    <dialog id="file-dialog">
+        <form method="dialog">
+            <h3>Select a Shader</h3>
+            <select id="file-list" size="10" style="width: 300px; margin-bottom: 10px;"></select>
+            <div>
+                <button value="cancel">Cancel</button>
+                <button id="file-select-btn" value="confirm">Load</button>
+            </div>
+        </form>
+    </dialog>
 
     <script src="script.js"></script>
 </body>
