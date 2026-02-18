@@ -171,6 +171,47 @@ canvas.addEventListener('mouseup', () => {
     mouse.w = -Math.abs(mouse.w);
 });
 
+// Resize logic
+const resizer = document.getElementById('resizer');
+let isResizing = false;
+
+resizer.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    resizer.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    
+    // Calculate new width
+    const containerWidth = document.getElementById('container').clientWidth;
+    const newWidth = e.clientX;
+    const percentage = (newWidth / containerWidth) * 100;
+    
+    // Limits
+    if (percentage > 5 && percentage < 95) {
+        canvas.style.width = percentage + '%';
+        // Force canvas resize to avoid stretching
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    if (isResizing) {
+        isResizing = false;
+        resizer.classList.remove('active');
+        document.body.style.cursor = '';
+        
+        // Final resize update
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+});
 
 // Editor setup
 editor.value = defaultFsSource;
