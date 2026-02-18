@@ -201,6 +201,41 @@ document.getElementById('load-btn').addEventListener('click', () => {
     }
 });
 
+document.getElementById('save-btn').addEventListener('click', () => {
+    const code = editor.value;
+    const filename = document.getElementById('filename-input').value || 'my_shader.frag';
+    
+    status.textContent = 'Saving...';
+    
+    fetch('/save', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ filename, code })
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.json();
+        } else {
+            throw new Error('Save failed');
+        }
+    })
+    .then(data => {
+        status.textContent = 'Saved: ' + filename;
+        status.style.color = '#4caf50';
+        setTimeout(() => {
+             // Revert status message if desired, or keep "Saved" until next action
+        }, 2000);
+        console.log(data);
+    })
+    .catch(err => {
+        console.error(err);
+        status.textContent = 'Save Error';
+        status.style.color = '#ff6b6b';
+    });
+});
+
 // Initial run
 initShaders(defaultFsSource);
 requestAnimationFrame(render);
