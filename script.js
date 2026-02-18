@@ -195,7 +195,9 @@ class ShaderNode {
         el.style.top = this.y + 'px';
         el.id = 'node-' + this.id;
         
-        el.style.width = this.width / 2 + 'px'; // Let width scale naturally? No, node width is fixed
+        // Remove direct width mapping to resolution. Use CSS fixed width or user resize handle later.
+        // el.style.width = this.width / 2 + 'px'; 
+
         // Actually, CSS sets node width to 200px.
         // We want the node to be resizable or adjust to aspect ratio.
         // The canvas inside is constrained by .node width 200px.
