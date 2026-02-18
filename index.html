@@ -13,7 +13,11 @@
             <textarea id="code-editor" spellcheck="false"></textarea>
             <div id="controls">
                 <button id="run-btn">Run (Ctrl+Enter)</button>
-                <button id="load-btn">Load Template</button>
+                <select id="shader-select" style="max-width: 150px;">
+                    <option value="">(Select Shader)</option>
+                </select>
+                <button id="load-file-btn">Load</button>
+                <button id="reset-btn">Reset</button>
                 <input type="text" id="filename-input" placeholder="filename.frag" value="my_shader.frag">
                 <button id="save-btn">Save</button>
                 <span id="status">Ready</span>

@@ -49,11 +49,17 @@ body, html {
     padding: 10px;
     background-color: #333;
     display: flex;
+    flex-wrap: wrap;       /* Allow wrapping */
     align-items: center;
     gap: 10px;
 }
 
+button, select, input {
+    white-space: nowrap;    /* Prevent button text from wrapping */
+}
+
 #filename-input {
+    width: 155px; /* Fixed width to prevent over-shrinking */
     padding: 8px;
     background-color: #1e1e1e;
     color: #eee;

@@ -193,12 +193,65 @@ document.getElementById('run-btn').addEventListener('click', () => {
     initShaders(editor.value);
 });
 
-document.getElementById('load-btn').addEventListener('click', () => {
+const shaderSelect = document.getElementById('shader-select');
+
+// Refresh shader list on load and after save
+function refreshShaderList() {
+    fetch('/list_shaders')
+        .then(res => res.json())
+        .then(files => {
+            const currentVal = shaderSelect.value;
+            shaderSelect.innerHTML = '<option value="">(Select Shader)</option>';
+            files.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file;
+                option.textContent = file;
+                shaderSelect.appendChild(option);
+            });
+            // Try to restore selection if it still exists
+            if (files.includes(currentVal)) {
+                shaderSelect.value = currentVal;
+            }
+        })
+        .catch(err => console.error('Failed to list shaders:', err));
+}
+
+// Initial load
+refreshShaderList();
+
+document.getElementById('reset-btn').addEventListener('click', () => {
     // Ideally load from file or predefined list, for now just reset
-    if (confirm('Reset to default shader?')) {
+    if (confirm('Reset to default shader? Unsaved changes will be lost.')) {
         editor.value = defaultFsSource;
         initShaders(defaultFsSource);
+        document.getElementById('filename-input').value = 'my_shader.frag';
     }
+});
+
+document.getElementById('load-file-btn').addEventListener('click', () => {
+    const filename = shaderSelect.value;
+    if (!filename) {
+        alert('Please select a shader from the list.');
+        return;
+    }
+    
+    fetch('/shaders/' + filename)
+        .then(res => {
+            if (!res.ok) throw new Error('Failed to load shader');
+            return res.text();
+        })
+        .then(text => {
+            editor.value = text;
+            document.getElementById('filename-input').value = filename;
+            initShaders(text);
+            status.textContent = 'Loaded: ' + filename;
+            status.style.color = '#4caf50';
+        })
+        .catch(err => {
+            console.error(err);
+            status.textContent = 'Load Error';
+            status.style.color = '#ff6b6b';
+        });
 });
 
 document.getElementById('save-btn').addEventListener('click', () => {
@@ -224,8 +277,18 @@ document.getElementById('save-btn').addEventListener('click', () => {
     .then(data => {
         status.textContent = 'Saved: ' + filename;
         status.style.color = '#4caf50';
+        refreshShaderList(); // Update list in case new file created
+        
+        // Auto-select the saved file
+        // We delay slightly to ensure list is refreshed, or handle it better
         setTimeout(() => {
-             // Revert status message if desired, or keep "Saved" until next action
+             if ([...shaderSelect.options].some(o => o.value === filename)) {
+                 shaderSelect.value = filename;
+             }
+        }, 500);
+
+        setTimeout(() => {
+             // Revert status message if desired
         }, 2000);
         console.log(data);
     })
