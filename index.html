@@ -15,9 +15,31 @@
         <!-- Code Editor Panel (Draggable/Docked) -->
         <div id="editor-panel">
             <div id="editor-header">
-                <span id="current-node-name">Select a Node</span>
+                <div class="header-row">
+                    <span id="current-node-label">Node:</span>
+                    <input type="text" id="node-name-input" placeholder="Node Name" value="Node 1">
+                    <select id="node-type-select">
+                        <option value="shader">Shader</option>
+                        <option value="texture">Texture</option>
+                        <option value="const">Const</option>
+                    </select>
+                </div>
+                <div class="header-row">
+                    <div id="node-res-container" style="display:inline-block;">
+                        <label>Res:</label>
+                        <input type="number" id="node-res-w" value="512" style="width: 50px;">
+                        <span>x</span>
+                        <input type="number" id="node-res-h" value="512" style="width: 50px;">
+                    </div>
+                    <div id="node-color-container" style="display:none; margin-left: 10px;">
+                        <label>Color:</label>
+                        <input type="color" id="node-color-picker" value="#ffffff">
+                    </div>
+                </div>
                 <div id="controls">
                     <button id="run-btn">Run (Ctrl+Enter)</button>
+                    <button id="upload-btn" style="display:none;">Upload Img</button>
+                    <input type="file" id="texture-input" accept="image/*" style="display:none;">
                     <button id="add-node-btn">+ Add Node</button>
                     <button id="save-btn">Save</button>
                     <span id="status">Ready</span>

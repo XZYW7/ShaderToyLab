@@ -61,6 +61,34 @@ body, html {
     background-color: #333;
     padding: 10px;
     border-bottom: 1px solid #444;
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping */
+    gap: 10px;
+}
+
+.header-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+#node-name-input, #node-type-select, #node-res-w, #node-res-h {
+    background-color: #1e1e1e;
+    color: #eee;
+    border: 1px solid #444;
+    padding: 4px;
+    border-radius: 4px;
+}
+
+#node-name-input {
+    width: 100px;
+}
+
+#controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto; /* Push to right */
 }
 
 #code-editor {
