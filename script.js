@@ -23,7 +23,8 @@ const DOM = {
         upload: document.getElementById('upload-btn'),
         run: document.getElementById('run-btn'),
         addNode: document.getElementById('add-node-btn'),
-        save: document.getElementById('save-btn') // Not implemented yet
+        save: document.getElementById('save-btn'),
+        load: document.getElementById('load-btn')
     }
 };
 
@@ -662,10 +663,13 @@ DOM.inputs.texture.addEventListener('change', (e) => {
         const reader = new FileReader();
         reader.onload = (event) => {
             const img = new Image();
-            img.onload = () => AppState.selectedNode.loadTexture(img);
-            img.src = event.target.result;
+            img.onload = () => {
+             this.loadTexture(img);
+             this.textureImgSrc = img.src; // Cache for save
         };
-        reader.readAsDataURL(file);
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
     }
 });
 
@@ -857,6 +861,170 @@ function drawLine(n1, n2, inputIndex = 0) {
 
 window.addEventListener('resize', updateConnections);
 
+// -- Load/Save Logic --
+
+function saveGraph() {
+    const data = {
+        nodes: AppState.nodes.map(n => ({
+            id: n.id,
+            x: n.x, y: n.y,
+            name: n.name,
+            type: n.type,
+            width: n.width,
+            height: n.height,
+            code: n.code,
+            showPreview: n.showPreview,
+            inputs: n.inputs,
+            // For Texture nodes, name is stored but not full data
+            textureSrc: (n.type === 'texture' && n.textureImgSrc) ? n.textureImgSrc : null
+        })),
+        pan: AppState.pan,
+        scale: AppState.scale,
+        nextNodeId: AppState.nextNodeId
+    };
+
+    const jsonStr = JSON.stringify(data);
+    localStorage.setItem('shaderToyLab_graph', jsonStr);
+    
+    // Also save to server
+    fetch('/save_graph', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: jsonStr
+    }).then(r => r.json()).then(res => {
+        console.log("Server response:", res);
+    }).catch(e => {
+        console.warn("Server save failed (offline?):", e);
+    });
+}
+
+
+function loadGraph() {
+    // Try to load from server first, fallback to localStorage
+    fetch('graph.json').then(r => {
+        if (!r.ok) throw new Error("No server graph found");
+        return r.json();
+    }).then(serverData => {
+         processLoad(serverData);
+    }).catch(e => {
+         // Fallback or user choice
+         console.warn("Could not load from server graph.json, trying local storage", e);
+         const json = localStorage.getItem('shaderToyLab_graph');
+         if(json) {
+             processLoad(JSON.parse(json));
+         } else {
+             // Init default
+             initDefaultScene();
+         }
+    });
+}
+
+function initDefaultScene() {
+    while(AppState.nodes.length > 0) removeNode(AppState.nodes[0]);
+    AppState.nodes = [];
+    DOM.connectionsSvg.innerHTML = '';
+    AppState.selectedNode = null;
+    DOM.editor.value = '';
+    
+    // Default scene
+    const node = new ShaderNode(AppState.nextNodeId++, 100, 100, SHADER_SOURCES.DEFAULT_FS, 'shader', 512, 512);
+    AppState.nodes.push(node);
+    selectNode(node);
+}
+
+function processLoad(data) {
+    // Clear existing nodes first
+    while(AppState.nodes.length > 0) {
+        removeNode(AppState.nodes[0]);
+    }
+    AppState.nodes = []; // Ensure empty array
+    DOM.connectionsSvg.innerHTML = '';
+    AppState.selectedNode = null;
+    DOM.editor.value = '';
+
+    try {
+        // Restore Global State
+        AppState.pan = data.pan || {x: 0, y: 0};
+        AppState.scale = data.scale || 1;
+        AppState.nextNodeId = data.nextNodeId || 1;
+        
+        updateTransform();
+
+        // Restore Nodes
+        data.nodes.forEach(nData => {
+            const node = new ShaderNode(
+                nData.id, 
+                nData.x, 
+                nData.y, 
+                nData.code || SHADER_SOURCES.DEFAULT_FS,
+                nData.type || 'shader',
+                nData.width || 512, 
+                nData.height || 512
+            );
+            node.name = nData.name || ('Node ' + nData.id);
+            node.showPreview = (nData.showPreview !== undefined) ? nData.showPreview : true;
+            node.canvas.style.display = node.showPreview ? 'block' : 'none';
+            // Restore inputs (IDs)
+            node.inputs = nData.inputs || [];
+            
+            // Re-compile explicitly if needed (already done in constructor but might need inputs connected)
+            // Deferred connection update
+            
+            if (nData.textureSrc && node.type === 'texture') {
+                // Try load texture if available (requires CORS/server support probably)
+                // Or stored as DataURL? (DataURL is safest for small images)
+                node.textureImgSrc = nData.textureSrc;
+                const img = new Image();
+                img.onload = () => node.loadTexture(img);
+                img.src = nData.textureSrc;
+            }
+
+            AppState.nodes.push(node);
+            
+            // Update UI title immediately
+            node.updateTitle();
+        });
+
+        // After all nodes created, update connections visual
+        setTimeout(() => {
+             AppState.nodes.forEach(n => {
+                  n.updateSockets();
+             });
+             updateConnections();
+        }, 100);
+
+    } catch (e) {
+        console.error("Failed to load graph:", e);
+        // Fallback
+        initDefaultScene();
+    }
+}
+
+// Auto-save periodically
+setInterval(saveGraph, 5000);
+
+// Bind Save Button
+if (DOM.buttons.save) {
+    DOM.buttons.save.addEventListener('click', () => {
+        saveGraph();
+        const btn = DOM.buttons.save;
+        const originalText = btn.textContent;
+        btn.textContent = "Saved!";
+        setTimeout(() => btn.textContent = originalText, 1000);
+    });
+}
+
+// Bind Load Button
+if (DOM.buttons.load) {
+    DOM.buttons.load.addEventListener('click', () => {
+        loadGraph();
+        const btn = DOM.buttons.load;
+        const originalText = btn.textContent;
+        btn.textContent = "Loaded!";
+        setTimeout(() => btn.textContent = originalText, 1000);
+    });
+}
+
 // -- Main Loop --
 
 function loop() {
@@ -870,5 +1038,10 @@ function loop() {
 }
 
 // -- Boot --
-addNode();
+loadGraph();
+
+
+// Auto-save periodically
+setInterval(saveGraph, 5000);
+
 loop();
