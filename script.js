@@ -153,6 +153,7 @@ class ShaderNode {
         this.type = type; // 'shader', 'texture', 'const'
         this.width = width;
         this.height = height;
+        this.showPreview = true; // Default to showing preview
 
         this.program = null;
         this.texture = null;
@@ -185,11 +186,38 @@ class ShaderNode {
         // The canvas inside is constrained by .node width 200px.
         // The height depends on resolution aspect ratio.
         
+        // Add Preview Toggle Button
+        const header = el.querySelector('.node-header');
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'node-toggle-preview';
+        toggleBtn.textContent = '👁'; 
+        toggleBtn.title = 'Toggle Preview';
+        toggleBtn.style.background = 'none';
+        toggleBtn.style.border = 'none';
+        toggleBtn.style.color = '#aaa';
+        toggleBtn.style.cursor = 'pointer';
+        toggleBtn.style.fontSize = '12px';
+        toggleBtn.style.marginRight = '5px';
+        
+        toggleBtn.addEventListener('mousedown', (e) => e.stopPropagation()); // Prevent drag
+        toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showPreview = !this.showPreview;
+            this.canvas.style.display = this.showPreview ? 'block' : 'none';
+            toggleBtn.textContent = this.showPreview ? '👁' : '🙈';
+            // Force redraw immediately if shown
+            if(this.showPreview) this.display();
+        });
+
+        // Insert before close button
+        const closeBtn = header.querySelector('.node-close');
+        header.insertBefore(toggleBtn, closeBtn);
+
         this.updateTitle(el);
         this.updateSockets(el);
 
         el.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.socket')) return; 
+            if (e.target.closest('.socket') || e.target.closest('button')) return; 
             selectNode(this);
             startDrag(e, this);
         });
@@ -462,6 +490,8 @@ class ShaderNode {
     }
 
     display() {
+        if (!this.showPreview) return; // Skip rendering canvas if hidden
+
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
         // Ensure sharedCanvas matches buffer size 
